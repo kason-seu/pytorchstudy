@@ -6,3 +6,6 @@
 /dataSources.local.xml
 # Zeppelin ignored files
 /ZeppelinRemoteNotebooks/
+../pytorchstudy.iml
+/misc.xml
+/modules.xml
