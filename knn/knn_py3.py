@@ -31,3 +31,4 @@ x = np.array([8.093607318, 3.365731514])
 predict_y = knn_classfier.predict(x.reshape(1,-1))
 print(predict_y)
 
+
