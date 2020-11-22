@@ -1,0 +1,148 @@
+import numpy as np
+import pickle as pkl
+import networkx as nx
+import scipy.sparse as sp
+import sys
+import os
+
+def parse_index_file(filename):
+    """Parse index file."""
+    index = []
+    for line in open(filename):
+        index.append(int(line.strip()))
+    return index
+def sample_mask(idx, l):
+    """Create mask."""
+    mask = np.zeros(l)
+    mask[idx] = 1
+    return np.array(mask, dtype=np.bool)
+
+def normalize_features(mx):
+    """Row-normalize sparse matrix"""
+    rowsum = np.array(mx.sum(1))
+    r_inv = np.power(rowsum, -1).flatten()
+    r_inv[np.isinf(r_inv)] = 0.
+    r_mat_inv = sp.diags(r_inv)
+    mx = r_mat_inv.dot(mx)
+    return mx
+
+# coordinate list sparse matrix for normalized adjacency matrix
+def normalize_adj(adj):
+    """Symmetrically normalize adjacency matrix."""
+    adj = sp.csr_matrix(adj)
+    adj += sp.eye(adj.shape[0])
+    rowsum = np.array(adj.sum(axis=1))
+    d_inv_sqrt = np.power(rowsum, -0.5).flatten()
+    d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.
+    d_mat_inv_sqrt = sp.diags(d_inv_sqrt)
+    return adj.dot(d_mat_inv_sqrt).transpose().dot(d_mat_inv_sqrt).tocsr()
+def load_data(dataset_str) -> tuple:
+    """
+    Loads input data from gcn/data directory
+
+    ind.dataset_str.x => the feature vectors of the training instances as scipy.sparse.csr.csr_matrix object;
+    ind.dataset_str.tx => the feature vectors of the test instances as scipy.sparse.csr.csr_matrix object;
+    ind.dataset_str.allx => the feature vectors of both labeled and unlabeled training instances
+        (a superset of ind.dataset_str.x) as scipy.sparse.csr.csr_matrix object;
+    ind.dataset_str.y => the one-hot labels of the labeled training instances as numpy.ndarray object;
+    ind.dataset_str.ty => the one-hot labels of the test instances as numpy.ndarray object;
+    ind.dataset_str.ally => the labels for instances in ind.dataset_str.allx as numpy.ndarray object;
+    ind.dataset_str.graph => a dict in the format {index: [index_of_neighbor_nodes]} as collections.defaultdict
+        object;
+    ind.dataset_str.test.index => the indices of test instances in graph, for the inductive setting as list object.
+
+    All objects above must be saved using python pickle module.
+
+    :param dataset_str: Dataset name
+    :return: All data input files loaded (as well the training/test data).
+
+
+    以cora为例：
+    ind.dataset_str.x => 训练实例的特征向量，是scipy.sparse.csr.csr_matrix类对象，shape:(140, 1433)
+    ind.dataset_str.tx => 测试实例的特征向量,shape:(1000, 1433)
+    ind.dataset_str.allx => 有标签的+无无标签训练实例的特征向量，是ind.dataset_str.x的超集，shape:(1708, 1433)
+
+    ind.dataset_str.y => 训练实例的标签，独热编码，numpy.ndarray类的实例，是numpy.ndarray对象，shape：(140, 7)
+    ind.dataset_str.ty => 测试实例的标签，独热编码，numpy.ndarray类的实例,shape:(1000, 7)
+    ind.dataset_str.ally => 对应于ind.dataset_str.allx的标签，独热编码,shape:(1708, 7)
+
+    ind.dataset_str.graph => 图数据，collections.defaultdict类的实例，格式为 {index：[index_of_neighbor_nodes]}
+    ind.dataset_str.test.index => 测试实例的id，2157行
+
+上述文件必须都用python的pickle模块存储
+    """
+    names = ['x', 'y', 'tx', 'ty', 'allx', 'ally', 'graph']
+    objects = []
+    dataDir = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..', 'data'))
+    for i in range(len(names)):
+        with open(dataDir + "\\ind.{}.{}".format(dataset_str, names[i]), 'rb') as f:
+            if sys.version_info > (3, 0):
+                objects.append(pkl.load(f, encoding='latin1'))
+            else:
+                objects.append(pkl.load(f))
+    # x是训练集的特征向量, tx是测试集的特征向量, y 是训练集的标签，ty是训练集的标签， allx 是有标签+无标签的特征向量,ally对应的allx的标签
+    x, y, tx, ty, allx, ally, graph = tuple(objects)
+    test_idx_reorder = parse_index_file(dataDir + "\\ind.{}.test.index".format(dataset_str))
+    test_idx_range = np.sort(test_idx_reorder)
+
+    if dataset_str == 'citeseer':
+        # Fix citeseer dataset (there are some isolated nodes in the graph)
+        # Find isolated nodes, add them as zero-vecs into the right position
+        test_idx_range_full = range(min(test_idx_reorder), max(test_idx_reorder)+1)
+        tx_extended = sp.lil_matrix((len(test_idx_range_full), x.shape[1]))
+        tx_extended[test_idx_range-min(test_idx_range), :] = tx
+        tx = tx_extended
+        ty_extended = np.zeros((len(test_idx_range_full), y.shape[1]))
+        ty_extended[test_idx_range-min(test_idx_range), :] = ty
+        ty = ty_extended
+
+    features = sp.vstack((allx, tx)).tolil()
+    features[test_idx_reorder, :] = features[test_idx_range, :]
+    features = normalize_features(features)
+    adj = nx.adjacency_matrix(nx.from_dict_of_lists(graph)) # 2708 * 2708 的邻接矩阵
+    adj = normalize_adj(adj)
+
+    labels = np.vstack((ally, ty))
+    labels[test_idx_reorder, :] = labels[test_idx_range, :]
+
+    idx_test = test_idx_range.tolist()
+    idx_train = range(len(y))
+    idx_val = range(len(y), len(y)+500)
+
+    train_mask = sample_mask(idx_train, labels.shape[0])
+    val_mask = sample_mask(idx_val, labels.shape[0])
+    test_mask = sample_mask(idx_test, labels.shape[0])
+
+    y_train = np.zeros(labels.shape)
+    y_val = np.zeros(labels.shape)
+    y_test = np.zeros(labels.shape)
+    y_train[train_mask, :] = labels[train_mask, :]
+    y_val[val_mask, :] = labels[val_mask, :]
+    y_test[test_mask, :] = labels[test_mask, :]
+    yy_train = labels[train_mask, :]
+    # adj(2708 *2708), features(2708 * 1433), y_train(2708 * 7, 不过取得是0-139的labels), y_val(2708 * 7, 取得是140-639的label), y_test(2708 * 7, 取得是1708-2707的labels)
+    return adj.A, features.A, y_train, y_val, y_test, train_mask, val_mask, test_mask,yy_train
+
+
+def relu(X):
+    return np.maximum(X, 0)
+
+def sigmod(X):
+    return 1 / (1 + np.exp(-X))
+def relu_diff(X):
+    return (X > 0).astype(int)
+if __name__ == '__main__':
+    adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask,yy_train  = load_data("cora")
+    print(yy_train)
+    print(yy_train.shape)
+    print(type(adj))
+    print(type(features))
+    print(type(y_train))
+    print(type(y_val))
+    print(type(y_test))
+    print(type(train_mask))
+    print(type(val_mask))
+    print(type(test_mask))
+    print(type(yy_train))
+
+    print(features[0:yy_train.shape[0]])
