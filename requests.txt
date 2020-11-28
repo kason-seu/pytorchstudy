@@ -1,0 +1,1 @@
+pip install -i https://pypi.tuna.tsinghua.edu.cn/simple torchvision==0.6.1 -f https://download.pytorch.org/whl/torch_stable.html
