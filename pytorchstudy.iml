@@ -7,6 +7,7 @@
       <sourceFolder url="file://$MODULE_DIR$/knn" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/pytorchlearn" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/numpylearn" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/pytorchlearn/two" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/data" type="java-resource" />
     </content>
     <orderEntry type="inheritedJdk" />
