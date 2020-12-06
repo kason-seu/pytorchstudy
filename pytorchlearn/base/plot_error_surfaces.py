@@ -37,7 +37,8 @@ class plot_error_surfaces(object):
             plt.title('Loss Surface Contour')
             plt.xlabel('w')
             plt.ylabel('b')
-            plt.contour(self.w, self.b, self.Z)
+            C = plt.contour(self.w, self.b, self.Z)
+            plt.clabel(C,inline=True,fontsize=10)
             plt.show()
 
     # Setter
@@ -76,3 +77,11 @@ class plot_error_surfaces(object):
         plt.xlabel('w')
         plt.ylabel('b')
         plt.show()
+
+
+
+import torch
+X = torch.arange(-3,2,0.1).view(-1,1)
+Y = 1 * X - 1
+
+p = plot_error_surfaces(15, 13, X, Y, 30)
