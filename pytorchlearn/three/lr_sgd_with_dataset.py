@@ -4,7 +4,7 @@ from torch.utils.data import Dataset,DataLoader
 class Data(Dataset):
     def __init__(self):
         self.x = torch.arange(-3,3,0.1).view(-1,1)
-        self.y = 1 * self.x - 1
+        self.y = 1 * self.x - 1 + torch.randn(1)
         self.len = self.x.shape[0]
 
     def __getitem__(self, item):
