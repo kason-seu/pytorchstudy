@@ -31,7 +31,7 @@ print(y)
 class Data(Dataset):
     def __init__(self):
         self.x = torch.arange(-3, 3, 0.1).view(-1,2)
-        self.f = self.x.mm(torch.tensor([[-1.0,1.0],[3.0,2.56]])) - 10
+        self.f = self.x.mm(torch.tensor([[-1.0,1.0],[3.0,2.56]])) + torch.tensor([-10.0,3.0])
         self.y = self.f + 0.001 * torch.randn((len(self.x),2))
         self.len = self.x.shape[0]
 
